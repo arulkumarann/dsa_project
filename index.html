@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delivery Route Planner</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f0f2f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #1a73e8;
+            margin-bottom: 20px;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+        .grid-container {
+            position: relative;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        #grid {
+            border: 1px solid #ccc;
+            display: block;
+            margin: 0 auto;
+        }
+        button {
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #1557b0;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        button:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .stats {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f0fe;
+            border-radius: 4px;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        .legend {
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+        #speedControl {
+            width: 100%;
+            margin-top: 10px;
+        }
+        #animationSpeed {
+            width: 50px;
+            text-align: center;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 8px;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover,
+        .close:focus {
+            color: #000;
+            text-decoration: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Delivery Route Planner</h1>
+        <div class="controls">
+            <button id="addDeliveryBtn">Add Delivery Point</button>
+            <button id="addRoadblockBtn">Add Roadblock</button>
+            <button id="calculateRouteBtn">Calculate Route</button>
+            <button id="animateRouteBtn" disabled>Animate Route</button>
+            <button id="resetBtn">Reset</button>
+            <button id="instructionsBtn">Instructions</button>
+        </div>
+        <div class="grid-container">
+            <canvas id="grid" width="800" height="600"></canvas>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #4CAF50"></div>
+                    <span>Start Point</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #FFA500"></div>
+                    <span>Delivery Points</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #FF0000"></div>
+                    <span>Roadblocks</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #2196F3"></div>
+                    <span>Calculated Route</span>
+                </div>
+            </div>
+            <div class="stats" id="stats"></div>
+            <div id="speedControl">
+                Animation Speed: <input type="range" min="1" max="100" value="50" id="animationSpeedSlider">
+                <span id="animationSpeed">50</span>ms
+            </div>
+        </div>
+    </div>
+
+    <div id="instructionsModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Instructions</h2>
+            <ol>
+                <li>Click "Add Delivery Point" and then click on the grid to add delivery points.</li>
+                <li>Click "Add Roadblock" and then click on the grid to add roadblocks.</li>
+                <li>Click "Calculate Route" to find the optimal path.</li>
+                <li>Click "Animate Route" to visualize the calculated route.</li>
+                <li>Use the slider to adjust the animation speed.</li>
+                <li>Click "Reset" to clear the grid and start over.</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('grid');
+        const ctx = canvas.getContext('2d');
+        const cellSize = 20;
+        const cols = Math.floor(canvas.width / cellSize);
+        const rows = Math.floor(canvas.height / cellSize);
+
+        let grid = [];
+        let startPoint = { x: 1, y: 1 };
+        let deliveryPoints = [];
+        let roadblocks = [];
+        let currentMode = null;
+        let route = [];
+        let animationSpeed = 50;
+        let animationInProgress = false;
+        let animationFrame = null;
+
+        const addDeliveryBtn = document.getElementById('addDeliveryBtn');
+        const addRoadblockBtn = document.getElementById('addRoadblockBtn');
+        const calculateRouteBtn = document.getElementById('calculateRouteBtn');
+        const animateRouteBtn = document.getElementById('animateRouteBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const instructionsBtn = document.getElementById('instructionsBtn');
+
+        // Initialize grid
+        function initGrid() {
+            grid = [];
+            for (let i = 0; i < rows; i++) {
+                grid[i] = [];
+                for (let j = 0; j < cols; j++) {
+                    grid[i][j] = 0;
+                }
+            }
+            grid[startPoint.y][startPoint.x] = 1;
+            drawGrid();
+        }
+
+        // Draw grid
+        function drawGrid() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid lines
+            ctx.strokeStyle = '#ddd';
+            for (let i = 0; i <= rows; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, i * cellSize);
+                ctx.lineTo(canvas.width, i * cellSize);
+                ctx.stroke();
+            }
+            for (let i = 0; i <= cols; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * cellSize, 0);
+                ctx.lineTo(i * cellSize, canvas.height);
+                ctx.stroke();
+            }
+
+            // Draw cells
+            for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    if (grid[i][j] === 1) { // Start point
+                        drawCell(j, i, '#4CAF50');
+                    }
+                    if (grid[i][j] === 2) { // Delivery point
+                        drawCell(j, i, '#FFA500');
+                    }
+                    if (grid[i][j] === 3) { // Roadblock
+                        drawCell(j, i, '#FF0000');
+                    }
+                }
+            }
+        }
+
+        function drawCell(x, y, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * cellSize + 1, y * cellSize + 1, cellSize - 2, cellSize - 2);
+        }
+
+        // Event handlers
+        function addDeliveryPoint() {
+            currentMode = 'delivery';
+            addDeliveryBtn.disabled = true;
+            addRoadblockBtn.disabled = false;
+        }
+
+        function addRoadblock() {
+            currentMode = 'roadblock';
+            addRoadblockBtn.disabled = true;
+            addDeliveryBtn.disabled = false;
+        }
+
+        function resetGrid() {
+            if (animationInProgress) {
+                cancelAnimationFrame(animationFrame);
+                animationInProgress = false;
+            }
+            deliveryPoints = [];
+            roadblocks = [];
+            route = [];
+            initGrid();
+            document.getElementById('stats').innerHTML = '';
+            animateRouteBtn.disabled = true;
+            addDeliveryBtn.disabled = false;
+            addRoadblockBtn.disabled = false;
+        }
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / cellSize);
+            const y = Math.floor((e.clientY - rect.top) / cellSize);
+
+            if (currentMode === 'delivery') {
+                if (grid[y][x] === 0) {
+                    grid[y][x] = 2;
+                    deliveryPoints.push({x, y});
+                    animateCell(x, y, '#FFA500');
+                }
+            } else if (currentMode === 'roadblock') {
+                if (grid[y][x] === 0) {
+                    grid[y][x] = 3;
+                    roadblocks.push({x, y});
+                    animateCell(x, y, '#FF0000');
+                }
+            }
+        });
+
+        function animateCell(x, y, color) {
+            const originalColor = ctx.fillStyle;
+            ctx.fillStyle = color;
+            let size = 0;
+            const animate = () => {
+                ctx.clearRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                ctx.fillRect(x * cellSize + cellSize/2 - size/2, y * cellSize + cellSize/2 - size/2, size, size);
+                size += 2;
+                if (size <= cellSize) {
+                    requestAnimationFrame(animate);
+                } else {
+                    ctx.fillRect(x * cellSize + 1, y * cellSize + 1, cellSize - 2, cellSize - 2);
+                }
+            };
+            animate();
+            ctx.fillStyle = originalColor;
+        }
+
+        // A* pathfinding algorithm
+        function heuristic(a, b) {
+            return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+        }
+
+        function getNeighbors(point) {
+            const neighbors = [];
+            const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+            
+            for (const [dx, dy] of directions) {
+                const newX = point.x + dx;
+                const newY = point.y + dy;
+                
+                if (newX >= 0 && newX < cols && newY >= 0 && newY < rows && grid[newY][newX] !== 3) {
+                    neighbors.push({x: newX, y: newY});
+                }
+            }
+            return neighbors;
+        }
+
+        function findPath(start, end) {
+            const openSet = [start];
+            const cameFrom = new Map();
+            const gScore = new Map();
+            const fScore = new Map();
+
+            gScore.set(`${start.x},${start.y}`, 0);
+            fScore.set(`${start.x},${start.y}`, heuristic(start, end));
+
+            while (openSet.length > 0) {
+                let current = openSet[0];
+                let lowestFScore = fScore.get(`${current.x},${current.y}`);
+                let currentIndex = 0;
+
+                for (let i = 1; i < openSet.length; i++) {
+                    const f = fScore.get(`${openSet[i].x},${openSet[i].y}`);
+                    if (f < lowestFScore) {
+                        lowestFScore = f;
+                        current = openSet[i];
+                        currentIndex = i;
+                    }
+                }
+
+                if (current.x === end.x && current.y === end.y) {
+                    const path = [];
+                    let temp = current;
+                    while (cameFrom.has(`${temp.x},${temp.y}`)) {
+                        path.unshift(temp);
+                        temp = cameFrom.get(`${temp.x},${temp.y}`);
+                    }
+                    path.unshift(start);
+                    return path;
+                }
+
+                openSet.splice(currentIndex, 1);
+
+                for (const neighbor of getNeighbors(current)) {
+                    const tentativeGScore = gScore.get(`${current.x},${current.y}`) + 1;
+                    const neighborKey = `${neighbor.x},${neighbor.y}`;
+
+                    if (!gScore.has(neighborKey) || tentativeGScore < gScore.get(neighborKey)) {
+                        cameFrom.set(neighborKey, current);
+                        gScore.set(neighborKey, tentativeGScore);
+                        fScore.set(neighborKey, tentativeGScore + heuristic(neighbor, end));
+                        
+                        if (!openSet.some(point => point.x === neighbor.x && point.y === neighbor.y)) {
+                            openSet.push(neighbor);
+                
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        function calculateRoute() {
+            if (deliveryPoints.length === 0) {
+                alert('Please add delivery points first!');
+                return;
+            }
+
+            route = [];
+            let currentPoint = startPoint;
+            let remainingPoints = [...deliveryPoints];
+            let totalDistance = 0;
+
+            while (remainingPoints.length > 0) {
+                let nearestPoint;
+                let nearestDistance = Infinity;
+                let nearestPath;
+                let nearestIndex;
+
+                for (let i = 0; i < remainingPoints.length; i++) {
+                    const path = findPath(currentPoint, remainingPoints[i]);
+                    if (path) {
+                        const distance = path.length;
+                        if (distance < nearestDistance) {
+                            nearestDistance = distance;
+                            nearestPoint = remainingPoints[i];
+                            nearestPath = path;
+                            nearestIndex = i;
+                        }
+                    }
+                }
+
+                if (nearestPoint) {
+                    route = route.concat(nearestPath);
+                    currentPoint = nearestPoint;
+                    remainingPoints.splice(nearestIndex, 1);
+                    totalDistance += nearestDistance;
+                } else {
+                    alert('Cannot reach all delivery points!');
+                    return;
+                }
+            }
+
+            // Return to start
+            const returnPath = findPath(currentPoint, startPoint);
+            if (returnPath) {
+                route = route.concat(returnPath.slice(1));
+                totalDistance += returnPath.length - 1;
+            }
+
+            drawGrid();
+            document.getElementById('stats').innerHTML = `
+                Total distance: ${totalDistance} units<br>
+                Delivery points: ${deliveryPoints.length}<br>
+                Roadblocks: ${roadblocks.length}
+            `;
+            animateRouteBtn.disabled = false;
+        }
+
+        function animateRoute() {
+            if (route.length === 0) {
+                alert('Please calculate the route first!');
+                return;
+            }
+
+            if (animationInProgress) {
+                cancelAnimationFrame(animationFrame);
+                animationInProgress = false;
+                drawGrid();
+                return;
+            }
+
+            animationInProgress = true;
+            drawGrid(); // Clear previous animation
+
+            let i = 0;
+            const animate = () => {
+                if (i < route.length - 1) {
+                    ctx.strokeStyle = '#2196F3';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(route[i].x * cellSize + cellSize/2, route[i].y * cellSize + cellSize/2);
+                    ctx.lineTo(route[i+1].x * cellSize + cellSize/2, route[i+1].y * cellSize + cellSize/2);
+                    ctx.stroke();
+                    i++;
+                    animationFrame = requestAnimationFrame(animate);
+                } else {
+                    animationInProgress = false;
+                }
+            };
+            animate();
+        }
+
+        // Speed control
+        const speedSlider = document.getElementById('animationSpeedSlider');
+        const speedDisplay = document.getElementById('animationSpeed');
+        speedSlider.addEventListener('input', (e) => {
+            animationSpeed = 101 - e.target.value;
+            speedDisplay.textContent = e.target.value;
+        });
+
+        // Instructions modal
+        const modal = document.getElementById('instructionsModal');
+        const closeBtn = document.getElementsByClassName('close')[0];
+
+        function openInstructions() {
+            modal.style.display = 'block';
+        }
+
+        closeBtn.onclick = function() {
+            modal.style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // Button event listeners
+        addDeliveryBtn.addEventListener('click', addDeliveryPoint);
+        addRoadblockBtn.addEventListener('click', addRoadblock);
+        calculateRouteBtn.addEventListener('click', calculateRoute);
+        animateRouteBtn.addEventListener('click', animateRoute);
+        resetBtn.addEventListener('click', resetGrid);
+        instructionsBtn.addEventListener('click', openInstructions);
+
+        // Initialize
+        initGrid();
+    </script>
+</body>
+</html>
